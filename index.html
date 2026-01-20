@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sinfonia Urbana</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00d2ff;
+            --secondary: #3a7bd5;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --danger: #ff7675;
+            --success: #55efc4;
+            --warning: #ffeaa7;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Montserrat', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; }
+
+        #game-container { width: 100%; height: 100%; max-width: 500px; margin: 0 auto; position: relative; display: flex; flex-direction: column; padding: 15px; }
+
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: var(--card); padding: 12px; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        .time-box, .survival-box { text-align: center; }
+        .time-value, .survival-value { font-size: 18px; font-weight: 900; color: var(--primary); }
+        .time-label, .survival-label { font-size: 9px; text-transform: uppercase; opacity: 0.6; font-weight: 700; }
+
+        #map-area { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "norte oeste" "centro leste" "sul sul"; gap: 10px; flex-grow: 1; }
+        .region { background: var(--card); border-radius: 18px; padding: 12px; position: relative; border: 2px solid rgba(255,255,255,0.05); transition: all 0.2s; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; }
+        .region:active { transform: scale(0.95); background: rgba(255,255,255,0.1); }
+        .region-name { font-size: 10px; font-weight: 700; text-transform: uppercase; margin-bottom: 5px; text-align: center; }
+        .region-icon { font-size: 20px; margin-bottom: 5px; }
+        
+        .db-bar-container { width: 100%; height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; margin-top: 5px; }
+        .db-bar-fill { height: 100%; width: 0%; background: var(--success); transition: width 0.3s, background 0.3s; }
+
+        .event-marker { position: absolute; top: 8px; right: 8px; width: 12px; height: 12px; background: var(--danger); border-radius: 50%; display: none; box-shadow: 0 0 10px var(--danger); animation: blink 0.5s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
+
+        #norte { grid-area: norte; } #sul { grid-area: sul; } #leste { grid-area: leste; } #oeste { grid-area: oeste; } #centro { grid-area: centro; }
+
+        /* Escritório */
+        #escritorio-container {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 2px solid rgba(0, 210, 255, 0.3);
+            border-radius: 20px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+        #escritorio-container:active { transform: scale(0.98); }
+        #escritorio-status { font-size: 11px; color: #94a3b8; margin-top: 4px; font-weight: 600; }
+        .office-marker { position: absolute; top: 10px; right: 15px; background: var(--warning); color: #000; font-size: 9px; font-weight: 900; padding: 2px 8px; border-radius: 10px; display: none; animation: blink 0.8s infinite; }
+
+        /* Quiz Modal */
+        #quiz-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.98);
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 500; padding: 25px; text-align: center;
+        }
+        #quiz-container { background: #fff; color: #1e293b; padding: 25px; border-radius: 25px; width: 100%; max-width: 400px; }
+        #quiz-question { font-size: 16px; font-weight: 700; margin-bottom: 20px; line-height: 1.4; }
+        .quiz-option { display: block; width: 100%; padding: 14px; margin: 8px 0; border: 2px solid #e2e8f0; border-radius: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+        .quiz-option:active { transform: scale(0.98); background: #f1f5f9; }
+
+        /* Screens */
+        .screen-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg); z-index: 1000; padding: 40px; text-align: center; }
+        .btn-main { padding: 18px 45px; background: linear-gradient(to right, #00d2ff, #3a7bd5); color: white; border: none; border-radius: 40px; font-size: 16px; font-weight: 900; cursor: pointer; box-shadow: 0 10px 20px rgba(58, 123, 213, 0.3); }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <header>
+        <div class="time-box">
+            <div class="time-label">Horário</div>
+            <div id="clock-val" class="time-value">08:00</div>
+            <div id="period-val" style="font-size: 9px; text-transform: uppercase; opacity: 0.7; font-weight: 700; text-align: center; margin-top: 2px; color: var(--primary);">Manhã</div>
+        </div>
+        <div style="text-align: center;">
+            <div style="font-size: 12px; font-weight: 900; color: var(--primary);">SINFONIA URBANA</div>
+            <div style="font-size: 8px; letter-spacing: 2px; opacity: 0.5;">GESTOR URBANO</div>
+        </div>
+        <div class="stat-box" style="text-align: center; min-width: 100px;">
+            <div style="font-size: 10px; color: #ff7675; text-transform: uppercase; font-weight: 700;">Satisfação</div>
+            <div id="satisfaction-val" style="font-weight: 900; font-size: 20px; color: #fff;">80%</div>
+            <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 4px; overflow: hidden;">
+                <div id="satisfaction-fill" style="height: 100%; width: 80%; background: var(--success); transition: width 0.3s;"></div>
+            </div>
+        </div>
+        <div class="survival-box">
+            <div class="survival-label">Sobrevivência</div>
+            <div id="days-val" class="survival-value">Dia 1</div>
+        </div>
+    </header>
+
+    <div id="map-area">
+        <div id="norte" class="region" onclick="handleRegionClick('norte')">
+            <div class="region-icon">🏭</div>
+            <div class="region-name">Norte (Industrial)</div>
+            <div class="db-bar-container"><div id="db-norte" class="db-bar-fill"></div></div>
+            <div id="marker-norte" class="event-marker"></div>
+        </div>
+        <div id="oeste" class="region" onclick="handleRegionClick('oeste')">
+            <div class="region-icon">🏠</div>
+            <div class="region-name">Oeste (Residencial)</div>
+            <div class="db-bar-container"><div id="db-oeste" class="db-bar-fill"></div></div>
+            <div id="marker-oeste" class="event-marker"></div>
+        </div>
+        <div id="centro" class="region" onclick="handleRegionClick('centro')">
+            <div class="region-icon">🏙️</div>
+            <div class="region-name">Centro (Comercial)</div>
+            <div class="db-bar-container"><div id="db-centro" class="db-bar-fill"></div></div>
+            <div id="marker-centro" class="event-marker"></div>
+        </div>
+        <div id="leste" class="region" onclick="handleRegionClick('leste')">
+            <div class="region-icon">🏥</div>
+            <div class="region-name">Leste (Hospitalar)</div>
+            <div class="db-bar-container"><div id="db-leste" class="db-bar-fill"></div></div>
+            <div id="marker-leste" class="event-marker"></div>
+        </div>
+        <div id="sul" class="region" onclick="handleRegionClick('sul')">
+            <div class="region-icon">🌳</div>
+            <div class="region-name">Sul (Lazer/Parques)</div>
+            <div class="db-bar-container"><div id="db-sul" class="db-bar-fill"></div></div>
+            <div id="marker-sul" class="event-marker"></div>
+        </div>
+    </div>
+
+    <div id="escritorio-container" onclick="handleEscritorioClick()">
+        <div class="office-marker" id="tag-escritorio">RELATÓRIO!</div>
+        <div style="font-size: 12px; font-weight: 900; color: var(--primary);">ESCRITÓRIO CENTRAL</div>
+        <div id="escritorio-status">Aguardando relatório diário...</div>
+    </div>
+
+    <div id="quiz-overlay">
+        <div id="quiz-container">
+            <div id="quiz-question">Pergunta?</div>
+            <div id="quiz-options"></div>
+        </div>
+    </div>
+
+    <div id="start-screen" class="screen-overlay">
+        <h1 style="font-size: 32px; font-weight: 900; margin-bottom: 10px; color: var(--primary);">SINFONIA URBANA</h1>
+        <p style="font-size: 14px; opacity: 0.7; margin-bottom: 30px; font-weight: 700;">GESTOR URBANO</p>
+        <button class="btn-main" onclick="startGame()">INICIAR MISSÃO</button>
+    </div>
+
+    <div id="game-over" class="screen-overlay" style="display:none;">
+        <h1 id="game-over-title" style="font-size: 28px; font-weight: 900; color: var(--danger); margin-bottom: 10px;">CIDADE EM CAOS!</h1>
+        <p id="final-score" style="font-size: 16px; margin-bottom: 30px; font-weight: 700;"></p>
+        <button class="btn-main" onclick="location.reload()">RECOMEÇAR</button>
+    </div>
+</div>
+
+<script>
+    const MAX_DB_INCREASE = 10;
+    const DEFEAT_DB_LIMIT = 20;
+    const OFFICE_PENALTY_SAT = 30;
+    const OFFICE_PENALTY_DB = 5;
+
+    const OFFICE_QUIZZES = [
+        {
+            q: "Sobre os efeitos do ruído muito grave (como o de motores ou compressores) no corpo a longo prazo, qual é a principal forma como ele prejudica a saúde?",
+            a: [
+                "Ele faz o peito e a barriga vibrarem, causando mal-estar e mudando o ritmo da respiração.",
+                "Ele deixa o corpo em estado de 'alerta' constante, aumentando o estresse, a pressão arterial e o risco de problemas no coração.",
+                "Ele cansa os músculos minúsculos do ouvido, causando uma sensação de pressão e entupimento."
+            ],
+            correct: 1
+        },
+        {
+            q: "No exame de audiometria, qual é o sinal clássico de que uma pessoa começou a perder audição por causa de exposição a muito barulho?",
+            a: [
+                "Um 'V' ou piora acentuada no gráfico do exame, especificamente para os sons agudos (em torno de 4000 Hz).",
+                "O reflexo protetor do ouvido (que contrai um músculo) não funciona direito para sons baixos.",
+                "A pessoa passar a entender pior as conversas em lugares barulhentos, antes de o exame de sons puros mostrar alguma coisa."
+            ],
+            correct: 0
+        },
+        {
+            q: "Para medir o risco do barulho do trânsito causar doenças do coração, qual é o tipo de medição mais importante?",
+            a: [
+                "Medir o barulho mais alto que acontece (os picos de som), pois eles assustam e estressam na hora.",
+                "Medir a média de barulho durante um período, dando mais peso ao barulho que ocorre durante a noite.",
+                "Medir cada barulho forte isolado (como uma buzinada) e contar quantos passam de um certo limite."
+            ],
+            correct: 1
+        },
+        {
+            q: "Em fábricas com máquinas muito barulhentas e que vibram muito, os trabalhadores podem ter problemas de saúde que não são só no ouvido. O que é a 'doença da vibração'?",
+            a: [
+                "Dedos brancos e dor nas mãos por causa do frio, devido à má circulação sanguínea.",
+                "Uma sensação de formigamento na pele causada diretamente pelo som muito alto.",
+                "Problemas nas juntas, músculos e ossos porque a vibração do equipamento sacode o corpo todo."
+            ],
+            correct: 2
+        },
+        {
+            q: "Por que o barulho em UTI neonatal é tão perigoso para os bebês prematuros?",
+            a: [
+                "Ele pode atrapalhar diretamente a formação do revestimento dos nervos que levam o som ao cérebro.",
+                "Ele impede que o bebê tenha um sono profundo e reparador, que é essencial para o cérebro se desenvolver e o corpo crescer.",
+                "Ele causa pequenos sangramentos nos vasos sanguíneos do ouvido do bebê, que ainda está se formando."
+            ],
+            correct: 1
+        }
+    ];
+
+    const QUIZZES = {
+        norte: [
+            { q: "Trem de carga passando com ruído excessivo nos trilhos. Solução?", a: ["Lubrificação de trilhos e barreiras", "Aumentar a velocidade do trem", "Pintar os vagões"], correct: 0, times: ["dawn", "morning", "afternoon", "night"] },
+            { q: "Sirene de aviso de turno soando muito alto e longo. Ação?", a: ["Ajustar volume e usar alertas visuais", "Remover a sirene totalmente", "Dobrar o tempo da sirene"], correct: 0, times: ["dawn", "morning", "afternoon", "night"] },
+            { q: "Ruído metálico constante de prensas industriais. Solução?", a: ["Enclausuramento acústico das máquinas", "Desligar as máquinas ao meio-dia", "Aumentar o pé direito do galpão"], correct: 0, times: ["dawn", "morning", "afternoon", "night"] }
+        ],
+        oeste: [
+            { q: "Madrugada: Corrida clandestina de motos detectada na região.", a: ["Policiamento nas vias", "Quebra-molas de borracha e radares", "Promover corridas legalizadas"], impacts: [ {db: -7, sat: 21}, {db: -12, sat: -15}, {db: 8, sat: -10} ], times: ["dawn"] },
+            { q: "Madrugada: Caixa de som alto em residência de vizinho.", a: ["Confiscar a caixa e aplicar multa", "Prender os vizinhos", "Ignorar"], impacts: [ {db: -6, sat: 8}, {db: -10, sat: -15}, {db: 8, sat: -10} ], times: ["dawn"] },
+            { q: "Manhã: Gritos e algazarra excessiva na vizinhança.", a: ["Campanha educativa sobre respeito sonoro", "Instalar câmeras com microfones", "Ignorar por ser horário comercial"], impacts: [ {db: -5, sat: 12}, {db: 0, sat: -15}, {db: 5, sat: -10} ], times: ["morning"] },
+            { q: "Manhã: Som excessivo de buzinas no trânsito local.", a: ["Melhorar fluidez com rotatórias e sinalização", "Proibir o uso de buzinas na cidade", "Aumentar o tempo dos semáforos"], impacts: [ {db: -8, sat: 18}, {db: -12, sat: -30}, {db: 6, sat: -15} ], times: ["morning"] },
+            { q: "Manhã: Motos com escapamento adulterado circulando na área.", a: ["Blitz de fiscalização e apreensão", "Proibir motos na região residencial", "Oferecer escapamentos gratuitos"], impacts: [ {db: -9, sat: 14}, {db: -15, sat: -40}, {db: 2, sat: -5} ], times: ["morning"] },
+            { q: "Tarde: Motos com escapamento adulterado perturbando o sossego.", a: ["Blitz de fiscalização e apreensão", "Instalar radares de ruído experimentais", "Ignorar até o fim do dia"], impacts: [ {db: -9, sat: 14}, {db: -5, sat: 5}, {db: 6, sat: -10} ], times: ["afternoon"] },
+            { q: "Tarde: Som de buzina constante no trânsito da região.", a: ["Implementar vias de mão única e binários", "Multar todos os carros parados", "Remover as calçadas para ampliar vias"], impacts: [ {db: -7, sat: 16}, {db: -4, sat: -20}, {db: 10, sat: -35} ], times: ["afternoon"] },
+            { q: "Tarde: Obras ruidosas perto de residências sem proteção.", a: ["Exigir barreiras acústicas e horários rígidos", "Embargar a obra permanentemente", "Fornecer protetores auriculares aos vizinhos"], impacts: [ {db: -6, sat: 10}, {db: -10, sat: -30}, {db: 0, sat: -5} ], times: ["afternoon"] },
+            { q: "Noite: Vizinhos soltando fogos de artifício ruidosos.", a: ["Fiscalização e multa baseada em lei municipal", "Permitir apenas em datas festivas", "Prender quem solta fogos"], impacts: [ {db: -12, sat: 15}, {db: 2, sat: -5}, {db: -14, sat: -5} ], times: ["night"] },
+            { q: "Noite: Caixa de som alto em residência de vizinho.", a: ["Fiscalização sonora e notificação imediata", "Chamar a tropa de choque", "Aumentar o som da própria casa"], impacts: [ {db: -8, sat: 12}, {db: -15, sat: -40}, {db: 10, sat: -20} ], times: ["night"] }
+        ],
+        centro: [
+            { q: "Tarde: Carro de publicidade com volume abusivo. Solução?", a: ["Regulamentar volume e horários", "Proibir publicidade móvel", "Aumentar o som para competir"], correct: 0, times: ["afternoon"] },
+            { q: "Manhã: Lojistas com caixas de som na calçada. Ação?", a: ["Fiscalização e apreensão de caixas", "Permitir apenas música calma", "Aumentar o IPTU comercial"], correct: 0, times: ["morning", "afternoon"] }
+        ],
+        leste: [
+            { q: "Madrugada: Corridas clandestinas perto do hospital. Ação?", a: ["Instalar radares e policiamento", "Mudar o hospital de lugar", "Colocar janelas de vidro simples"], correct: 0, times: ["dawn"] },
+            { q: "Manhã: Buzinas constantes na frente da emergência. Solução?", a: ["Sinalização de 'Silêncio' e multas", "Proibir carros na rua do hospital", "Aumentar o volume da recepção"], correct: 0, times: ["morning", "afternoon"] }
+        ],
+        sul: [
+            { q: "Noite: Som alto em quiosques do parque. Como agir?", a: ["Limitar decibéis e horários", "Fechar o parque às 18h", "Contratar um DJ mais alto"], correct: 0, times: ["night"] }
+        ]
+    };
+
+    let state = {
+        gameActive: false,
+        hours: 8,
+        days: 1,
+        satisfaction: 80,
+        quizActive: false,
+        officeEvent: false,
+        officeDoneToday: false,
+        isOfficeQuiz: false,
+        regions: {
+            norte: { base: 70, db: 70, event: null, eventTime: 0, quizAttempted: false, targetDb: 70 },
+            sul: { base: 55, db: 55, event: null, eventTime: 0, quizAttempted: false, targetDb: 55 },
+            leste: { base: 45, db: 45, event: null, eventTime: 0, quizAttempted: false, targetDb: 45 },
+            oeste: { base: 50, db: 50, event: null, eventTime: 0, quizAttempted: false, targetDb: 50 },
+            centro: { base: 65, db: 65, event: null, eventTime: 0, quizAttempted: false, targetDb: 65 }
+        }
+    };
+
+    function startGame() {
+        document.getElementById('start-screen').style.display = 'none';
+        state.gameActive = true;
+        updateClock();
+        gameTick();
+    }
+
+    function gameTick() {
+        if (!state.gameActive) return;
+        
+        if (!state.quizActive) {
+            for (let r in state.regions) {
+                const reg = state.regions[r];
+                
+                // Se houver evento, sobe o dB até o target (base + 10)
+                if (reg.event) {
+                    if (reg.db < reg.targetDb) {
+                        reg.db = Math.min(reg.targetDb, reg.db + 0.08); // Velocidade de subida
+                    }
+                }
+
+                // Atualizar UI
+                const fill = document.getElementById(`db-${r}`);
+                const pct = ((reg.db - reg.base) / DEFEAT_DB_LIMIT) * 100;
+                fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+                fill.style.background = pct > 80 ? 'var(--danger)' : (pct > 50 ? 'var(--warning)' : 'var(--success)');
+
+                // Verificar derrota
+                if (reg.db >= reg.base + DEFEAT_DB_LIMIT) {
+                    endGame(`A região ${r.toUpperCase()} ultrapassou o limite crítico de ruído!`);
+                    return;
+                }
+            }
+
+            if (state.satisfaction <= 0) {
+                endGame("A população se revoltou com sua gestão!");
+                return;
+            }
+        }
+        requestAnimationFrame(gameTick);
+    }
+
+    function updateClock() {
+        if (!state.gameActive) return;
+        
+        if (!state.quizActive) {
+            state.hours++;
+            if (state.hours >= 24) {
+                state.hours = 0;
+                state.days++;
+                state.officeDoneToday = false;
+                if (state.days > 5) {
+                    winGame();
+                    return;
+                }
+            }
+
+            // Evento de escritório às 09:00
+            if (state.hours === 9 && !state.officeDoneToday) {
+                state.officeEvent = true;
+                document.getElementById('tag-escritorio').style.display = 'block';
+                document.getElementById('escritorio-status').innerText = "RELATÓRIO DISPONÍVEL!";
+            }
+
+            // Atualizar Relógio e Período
+            const h = state.hours.toString().padStart(2, '0');
+            document.getElementById('clock-val').innerText = `${h}:00`;
+            document.getElementById('days-val').innerText = `Dia ${state.days}`;
+
+            let period = "Manhã";
+            if (state.hours >= 0 && state.hours < 6) period = "Madrugada";
+            else if (state.hours >= 12 && state.hours < 18) period = "Tarde";
+            else if (state.hours >= 18) period = "Noite";
+            document.getElementById('period-val').innerText = period;
+
+            checkEvents();
+        }
+        setTimeout(updateClock, 1200);
+    }
+
+    function checkEvents() {
+        // Chance de spawn de evento
+        if (Math.random() < 0.5) {
+            const keys = Object.keys(state.regions);
+            const r = keys[Math.floor(Math.random() * keys.length)];
+            
+            // Só cria evento se não houver um ativo
+            if (!state.regions[r].event) {
+                state.regions[r].event = true;
+                state.regions[r].eventTime = 4; // Dura 4 horas de jogo
+                state.regions[r].quizAttempted = false;
+                state.regions[r].targetDb = Math.min(state.regions[r].base + DEFEAT_DB_LIMIT, state.regions[r].db + MAX_DB_INCREASE);
+                
+                let period = "morning";
+                if (state.hours >= 0 && state.hours < 6) period = "dawn";
+                else if (state.hours >= 12 && state.hours < 18) period = "afternoon";
+                else if (state.hours >= 18) period = "night";
+                state.regions[r].eventPeriod = period;
+                
+                document.getElementById(`marker-${r}`).style.display = 'block';
+            }
+        }
+
+        // Processar expiração de eventos
+        for (let r in state.regions) {
+            if (state.regions[r].event) {
+                state.regions[r].eventTime--;
+                if (state.regions[r].eventTime <= 0) {
+                    state.regions[r].event = null;
+                    state.regions[r].quizAttempted = false;
+                    document.getElementById(`marker-${r}`).style.display = 'none';
+                }
+            }
+        }
+    }
+
+    function handleRegionClick(regionId) {
+        if (!state.gameActive || state.quizActive) return;
+        // Só abre quiz se houver evento E ainda não foi tentado
+        if (!state.regions[regionId].event || state.regions[regionId].quizAttempted) return;
+        
+        state.activeRegionId = regionId;
+        state.isOfficeQuiz = false;
+        showQuiz(regionId);
+    }
+
+    function handleEscritorioClick() {
+        if (!state.gameActive || state.quizActive || !state.officeEvent) return;
+        state.isOfficeQuiz = true;
+        showQuiz('escritorio');
+    }
+
+    function showQuiz(regionId) {
+        state.quizActive = true;
+        let quiz;
+        
+        if (state.isOfficeQuiz) {
+            quiz = OFFICE_QUIZZES[Math.min(state.days - 1, OFFICE_QUIZZES.length - 1)];
+        } else {
+            const r = state.regions[regionId];
+            const list = QUIZZES[regionId].filter(q => q.times.includes(r.eventPeriod));
+            quiz = list.length > 0 ? list[Math.floor(Math.random() * list.length)] : QUIZZES[regionId][0];
+        }
+
+        document.getElementById('quiz-overlay').style.display = 'flex';
+        document.getElementById('quiz-question').innerText = quiz.q;
+        const optionsDiv = document.getElementById('quiz-options');
+        optionsDiv.innerHTML = '';
+
+        // Embaralhar alternativas
+        let indices = quiz.a.map((_, i) => i);
+        indices.sort(() => Math.random() - 0.5);
+
+        indices.forEach(idx => {
+            const btn = document.createElement('div');
+            btn.className = 'quiz-option';
+            btn.innerText = quiz.a[idx];
+            btn.onclick = () => {
+                if (state.isOfficeQuiz) {
+                    if (idx === quiz.correct) {
+                        state.satisfaction = Math.min(100, state.satisfaction + 6);
+                    } else {
+                        state.satisfaction = Math.max(0, state.satisfaction - OFFICE_PENALTY_SAT);
+                        for (let r in state.regions) {
+                            state.regions[r].db = Math.min(state.regions[r].base + DEFEAT_DB_LIMIT, state.regions[r].db + OFFICE_PENALTY_DB);
+                        }
+                    }
+                    state.officeEvent = false;
+                    state.officeDoneToday = true;
+                    document.getElementById('tag-escritorio').style.display = 'none';
+                    document.getElementById('escritorio-status').innerText = "Relatório enviado.";
+                } else {
+                    state.regions[regionId].quizAttempted = true;
+                    let dbImp = 0, satImp = 0;
+                    
+                    if (quiz.impacts && quiz.impacts[idx]) {
+                        dbImp = quiz.impacts[idx].db; 
+                        satImp = quiz.impacts[idx].sat;
+                    } else {
+                        if (idx === quiz.correct) { 
+                            dbImp = -5; 
+                            satImp = 6; 
+                        } else { 
+                            dbImp = 0; 
+                            satImp = -15; 
+                        }
+                    }
+                    
+                    state.satisfaction = Math.max(0, Math.min(100, state.satisfaction + satImp));
+                    
+                    if (dbImp < 0) {
+                        // Acerto: Reduz dB e encerra evento
+                        state.regions[regionId].db = Math.max(state.regions[regionId].base, state.regions[regionId].db + dbImp);
+                        state.regions[regionId].event = null;
+                        document.getElementById(`marker-${regionId}`).style.display = 'none';
+                    } else {
+                        // Erro: Sobe dB até o target e encerra evento
+                        if (dbImp > 0) {
+                            state.regions[regionId].db = Math.min(state.regions[regionId].base + DEFEAT_DB_LIMIT, state.regions[regionId].db + dbImp);
+                        } else {
+                            state.regions[regionId].db = state.regions[regionId].targetDb;
+                        }
+                        state.regions[regionId].event = null;
+                        document.getElementById(`marker-${regionId}`).style.display = 'none';
+                    }
+                }
+                updateSatisfactionUI();
+                state.quizActive = false;
+                document.getElementById('quiz-overlay').style.display = 'none';
+            };
+            optionsDiv.appendChild(btn);
+        });
+    }
+
+    function updateSatisfactionUI() {
+        document.getElementById('satisfaction-val').innerText = `${Math.floor(state.satisfaction)}%`;
+        document.getElementById('satisfaction-fill').style.width = `${state.satisfaction}%`;
+    }
+
+    function endGame(msg) {
+        state.gameActive = false;
+        document.getElementById('final-score').innerText = msg;
+        document.getElementById('game-over').style.display = 'flex';
+    }
+
+    function winGame() {
+        state.gameActive = false;
+        document.getElementById('game-over-title').innerText = "MISSÃO CUMPRIDA!";
+        document.getElementById('game-over-title').style.color = "var(--success)";
+        document.getElementById('final-score').innerText = "Você gerenciou a cidade com maestria por 5 dias!";
+        document.getElementById('game-over').style.display = 'flex';
+    }
+</script>
+</body>
+</html>
